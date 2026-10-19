@@ -229,6 +229,23 @@
   .req { color: var(--red); }
   .step.done .dot, .step.on::before, .step.done::before { background: var(--blue); border-color: var(--blue); color: #fff; }
   .step.on .dot { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
+  .variants { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .variants button { border: 0; background: #fff; padding: 8px 10px; color: var(--muted); }
+  .variants button.on { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+  .variants button + button { border-left: 1px solid var(--line-strong); }
+  .modal.b { width: min(980px, calc(100vw - 40px)); }
+  .modal-split { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 460px; }
+  .modal-split aside { border-right: 1px solid var(--line); background: #f7f9fc; }
+  .modal-split .pane { padding: 18px 20px 22px; overflow: auto; }
+  .stepper.vertical { flex-direction: column; margin: 0; padding: 20px 16px; height: 100%; }
+  .stepper.vertical .step { flex: none; flex-direction: row; align-items: flex-start; text-align: left; gap: 10px; padding: 0 0 26px; }
+  .stepper.vertical .step:last-child { padding-bottom: 0; }
+  .stepper.vertical .step > span:last-child { padding-top: 4px; line-height: 1.35; }
+  .stepper.vertical .step::before { top: 28px; left: 13px; width: 2px; height: calc(100% - 28px); }
+  .stepper.vertical .step:first-child::before { display: block; }
+  .stepper.vertical .step:last-child::before { display: none; }
+  .stepper.vertical .step.on::before { background: var(--line-strong); }
+  .stepper.vertical .step .opt { display: inline; margin-left: 6px; }
   .choice {
     width: 100%; text-align: left; background: #fff; border: 1px solid var(--line-strong);
     border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start;
@@ -335,7 +352,8 @@ const state = {
   onlyNoAccess: false,
   detailTab: "Overview",
   toast: "",
-  modal: null
+  modal: null,
+  variation: "A"
 };
 
 const UNSCOPED = ["Freight Route Optimizer", "Glossary Curator", "Meeting Notes Copilot", "Pipeline Coach", "Desktop Research Assistant", "Invoice Processing Agent"];
@@ -376,7 +394,13 @@ function listView() {
         <h1>AI agents</h1>
         <p class="lede">Authorize external AI agents to call Salesforce. User agents act for the signed-in person; enterprise agents run under their own identity.</p>
       </div>
-      <div class="head-actions"><button class="btn primary" id="add-agent">Register agent</button></div>
+      <div class="head-actions">
+        <div class="variants" role="group" aria-label="Registration layout">
+          <button type="button" class="${state.variation === "A" ? "on" : ""}" data-variant="A">Option A</button>
+          <button type="button" class="${state.variation === "B" ? "on" : ""}" data-variant="B">Option B</button>
+        </div>
+        <button class="btn primary" id="add-agent">Register agent</button>
+      </div>
     </div>
     ${state.toast ? `<div class="banner green"><div><strong>${esc(state.toast)}</strong></div></div>` : ""}
     <div class="banner red">
@@ -526,6 +550,7 @@ function bind() {
   if (scope) scope.onchange = () => { state.scope = scope.value; render(); };
   const add = document.getElementById("add-agent");
   if (add) add.onclick = openAdd;
+  document.querySelectorAll("[data-variant]").forEach(el => el.onclick = () => { state.variation = el.dataset.variant; render(); });
   const un = document.getElementById("toggle-unscoped");
   if (un) un.onclick = () => { state.scope = state.scope === "not" ? "all" : "not"; state.onlyNoAccess = false; state.tab = "all"; render(); };
   const na = document.getElementById("toggle-noaccess");
@@ -615,7 +640,8 @@ function renderModal() {
     ["Who can use it", false],
     ["Scoped access", true]
   ];
-  const stepper = `<ol class="stepper" aria-label="Registration progress">
+  const vertical = state.variation === "B";
+  const stepper = `<ol class="stepper ${vertical ? "vertical" : ""}" aria-label="Registration progress">
       ${steps.map(([label, optional], i) => {
         const n = i + 1;
         const stateName = n < stepIndex ? "done" : n === stepIndex ? "on" : "";
@@ -625,9 +651,12 @@ function renderModal() {
         </li>`;
       }).join("")}
     </ol>`;
-  root.innerHTML = `<div class="backdrop"><div class="modal" role="dialog" aria-labelledby="modal-title">
+  const content = vertical
+    ? `<div class="modal-split"><aside>${stepper}</aside><div class="pane">${body}</div></div>`
+    : `<div class="body">${stepper}${body}</div>`;
+  root.innerHTML = `<div class="backdrop"><div class="modal ${vertical ? "b" : ""}" role="dialog" aria-labelledby="modal-title">
     <header><h2 id="modal-title">Register agent</h2><button class="x" id="close" aria-label="Close">×</button></header>
-    <div class="body">${stepper}${body}</div>
+    ${content}
     <footer>
       <button class="btn ghost" id="cancel">Cancel</button>
       <span class="spacer note">Step ${stepIndex} of 5 · ${draft.step === "scope" ? "Optional" : "Required"} · nothing is saved until you save</span>

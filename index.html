@@ -597,16 +597,15 @@ function renderModal() {
       ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}
       ${authChoice("Enterprise Managed Authorization", "Enterprise Managed Authorization", "The agent authenticates through an authentication provider.", providerField)}`;
   } else if (draft.step === "permission") {
-    const permLabel = who === "user" ? "User permission set" : "Permission set";
-    body = `<h2 style="margin:0 0 6px">${permLabel}</h2>
-      <p class="lede" style="margin-bottom:12px">This is the permission set ${esc(draft.name || "this agent")} uses when it calls Salesforce.</p>
-      <div class="field"><label for="permission">${permLabel}</label><select id="permission"><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+    body = `<h2 style="margin:0 0 6px">Who can use this agent?</h2>
+      <p class="lede" style="margin-bottom:12px">Users with the permission set you choose can use ${esc(draft.name || "this agent")}.</p>
+      <div class="field"><label for="permission">Permission set</label><select id="permission"><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   } else {
     body = `<h2 style="margin:0 0 6px">Scoped access</h2>
       <p class="lede" style="margin-bottom:12px">Optional. A scope narrows what ${esc(draft.name || "this agent")} can reach. You can leave this empty and add one later.</p>
       <div class="field"><label for="scope-pick">Scoped access</label><select id="scope-pick"><option value="">None</option>${SCOPES.map(p => `<option ${draft.scope === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   }
-  const steps = ["Agent type", "Name and where it runs", "Advanced settings", "Permission set", "Scoped access"];
+  const steps = ["Agent type", "Name and where it runs", "Advanced settings", "Who can use it", "Scoped access"];
   const stepper = `<ol class="stepper" aria-label="Registration progress">
       ${steps.map((label, i) => {
         const n = i + 1;

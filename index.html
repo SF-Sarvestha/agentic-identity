@@ -562,11 +562,6 @@ function bind() {
   if (scope) scope.onchange = () => { state.scope = scope.value; render(); };
   const add = document.getElementById("add-agent");
   if (add) add.onclick = openAdd;
-  document.querySelectorAll("[data-variant]").forEach(el => el.onclick = () => {
-    if (document.getElementById("variant-float").dataset.suppress) return;
-    state.variation = el.dataset.variant;
-    render();
-  });
   const un = document.getElementById("toggle-unscoped");
   if (un) un.onclick = () => { state.scope = state.scope === "not" ? "all" : "not"; state.onlyNoAccess = false; state.tab = "all"; render(); };
   const na = document.getElementById("toggle-noaccess");
@@ -756,7 +751,15 @@ function register() {
   float.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const box = float.getBoundingClientRect();
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: box.left, top: box.top, moved: false };
+    drag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: box.left,
+      top: box.top,
+      moved: false,
+      choice: e.target.closest("[data-variant]")
+    };
     float.setPointerCapture(e.pointerId);
   });
   float.addEventListener("pointermove", (e) => {
@@ -775,12 +778,12 @@ function register() {
   });
   const end = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    if (drag.moved) {
-      float.dataset.suppress = "1";
-      setTimeout(() => { delete float.dataset.suppress; }, 0);
-    }
+    const choice = drag.moved ? null : drag.choice;
     drag = null;
     float.classList.remove("dragging");
+    if (!choice) return;
+    state.variation = choice.dataset.variant;
+    render();
   };
   float.addEventListener("pointerup", end);
   float.addEventListener("pointercancel", end);

@@ -225,6 +225,8 @@
   .step:first-child::before { display: none; }
   .step.done, .step.on { color: var(--ink); }
   .step.on { font-weight: 700; }
+  .step .opt { display: block; color: var(--faint); font-weight: 450; font-size: 11px; }
+  .req { color: var(--red); }
   .step.done .dot, .step.on::before, .step.done::before { background: var(--blue); border-color: var(--blue); color: #fff; }
   .step.on .dot { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
   .choice {
@@ -583,36 +585,43 @@ function renderModal() {
       ${choice("kind", "enterprise", "Enterprise agent", "Runs under its own identity, including when nobody is signed in.")}`;
   } else if (draft.step === "details") {
     body = `<h2 style="margin:0 0 12px">Name this external ${who} agent</h2>
-      <div class="field"><label for="agent-name">External ${who} agent name</label>
+      <div class="field"><label for="agent-name">External ${who} agent name <span class="req">*</span></label>
         <p class="help">This is the name admins see in the agent list.</p>
-        <input id="agent-name" value="${esc(draft.name)}" />
+        <input id="agent-name" required value="${esc(draft.name)}" />
       </div>
-      <div class="field"><label>Where will this agent run?</label></div>
+      <div class="field"><label>Where will this agent run? <span class="req">*</span></label></div>
       ${choice("run", "Provider server", "Provider server", "Provider servers can store a client secret.")}
       ${choice("run", "User Local Machine", "User Local Machine", "An agent running locally isn't secure enough to safely store a client secret.")}`;
   } else if (draft.step === "access") {
-    const callbackField = `<div class="field"><label for="callback">Callback URL</label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
-    const providerField = `<div class="field"><label for="provider">Authentication provider</label><select id="provider"><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
-    body = `<h2 style="margin:0 0 12px">Advanced settings</h2>
+    const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
+    const providerField = `<div class="field"><label for="provider">Authentication provider <span class="req">*</span></label><select id="provider" required><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+    body = `<h2 style="margin:0 0 6px">Advanced settings</h2>
+      <p class="lede" style="margin-bottom:12px">Required. Choose how this agent authenticates.</p>
       ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}
       ${authChoice("Enterprise Managed Authorization", "Enterprise Managed Authorization", "The agent authenticates through an authentication provider.", providerField)}`;
   } else if (draft.step === "permission") {
     body = `<h2 style="margin:0 0 6px">Who can use this agent?</h2>
       <p class="lede" style="margin-bottom:12px">Users with the permission set you choose can use ${esc(draft.name || "this agent")}.</p>
-      <div class="field"><label for="permission">Permission set</label><select id="permission"><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+      <div class="field"><label for="permission">Permission set <span class="req">*</span></label><select id="permission" required><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   } else {
     body = `<h2 style="margin:0 0 6px">Scoped access</h2>
       <p class="lede" style="margin-bottom:12px">Optional. A scope narrows what ${esc(draft.name || "this agent")} can reach. You can leave this empty and add one later.</p>
-      <div class="field"><label for="scope-pick">Scoped access</label><select id="scope-pick"><option value="">None</option>${SCOPES.map(p => `<option ${draft.scope === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+      <div class="field"><label for="scope-pick">Scoped access <span class="opt">Optional</span></label><select id="scope-pick"><option value="">None</option>${SCOPES.map(p => `<option ${draft.scope === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   }
-  const steps = ["Agent type", "Name and where it runs", "Advanced settings", "Who can use it", "Scoped access"];
+  const steps = [
+    ["Agent type", false],
+    ["Name and where it runs", false],
+    ["Advanced settings", false],
+    ["Who can use it", false],
+    ["Scoped access", true]
+  ];
   const stepper = `<ol class="stepper" aria-label="Registration progress">
-      ${steps.map((label, i) => {
+      ${steps.map(([label, optional], i) => {
         const n = i + 1;
         const stateName = n < stepIndex ? "done" : n === stepIndex ? "on" : "";
         return `<li class="step ${stateName}" ${n === stepIndex ? 'aria-current="step"' : ""}>
           <span class="dot">${n < stepIndex ? "✓" : n}</span>
-          <span>${label}</span>
+          <span>${label}${optional ? `<span class="opt">Optional</span>` : ""}</span>
         </li>`;
       }).join("")}
     </ol>`;
@@ -621,7 +630,7 @@ function renderModal() {
     <div class="body">${stepper}${body}</div>
     <footer>
       <button class="btn ghost" id="cancel">Cancel</button>
-      <span class="spacer note">Step ${stepIndex} of 5 · nothing is saved until you save</span>
+      <span class="spacer note">Step ${stepIndex} of 5 · ${draft.step === "scope" ? "Optional" : "Required"} · nothing is saved until you save</span>
       ${draft.step !== "type" ? `<button class="btn quiet" id="back">Back</button>` : ""}
       <button class="btn primary" id="next" ${stepReady() ? "" : "disabled"}>${draft.step === "scope" ? "Save" : "Continue"}</button>
     </footer>

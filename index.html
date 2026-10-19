@@ -229,8 +229,16 @@
   .req { color: var(--red); }
   .step.done .dot, .step.on::before, .step.done::before { background: var(--blue); border-color: var(--blue); color: #fff; }
   .step.on .dot { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
-  .variants { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
-  .variants button { border: 0; background: #fff; padding: 8px 10px; color: var(--muted); }
+  .variant-float {
+    position: fixed; right: 24px; bottom: 24px; z-index: 40;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 6px 6px 10px; background: #fff; border: 1px solid var(--line);
+    border-radius: 999px; box-shadow: var(--shadow); cursor: grab; user-select: none; touch-action: none;
+  }
+  .variant-float.dragging { cursor: grabbing; }
+  .variant-float .grip { color: var(--faint); font-size: 14px; letter-spacing: -2px; line-height: 1; }
+  .variants { display: flex; border: 1px solid var(--line-strong); border-radius: 999px; overflow: hidden; }
+  .variants button { border: 0; background: #fff; padding: 8px 12px; color: var(--muted); cursor: pointer; }
   .variants button.on { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
   .variants button + button { border-left: 1px solid var(--line-strong); }
   .modal.b { width: min(980px, calc(100vw - 40px)); }
@@ -322,6 +330,13 @@
   <main class="main" id="main"></main>
 </div>
 <div id="modal-root"></div>
+<div class="variant-float" id="variant-float">
+  <span class="grip" aria-hidden="true">⋮⋮</span>
+  <div class="variants" role="group" aria-label="Registration layout">
+    <button type="button" class="on" data-variant="A">Option A</button>
+    <button type="button" data-variant="B">Option B</button>
+  </div>
+</div>
 <script>
 const AGENTS = [
   { name: "A2A Router", type: "enterprise", client: "Confidential", auth: "ID-JAG", provider: "Okta", access: "EMA Permission Set", scope: "A2A · scoped", scopeTone: "ok", clientId: "3MVG9L07Nkc8ZKL4RgjADWh4Lezi" },
@@ -395,10 +410,6 @@ function listView() {
         <p class="lede">Authorize external AI agents to call Salesforce. User agents act for the signed-in person; enterprise agents run under their own identity.</p>
       </div>
       <div class="head-actions">
-        <div class="variants" role="group" aria-label="Registration layout">
-          <button type="button" class="${state.variation === "A" ? "on" : ""}" data-variant="A">Option A</button>
-          <button type="button" class="${state.variation === "B" ? "on" : ""}" data-variant="B">Option B</button>
-        </div>
         <button class="btn primary" id="add-agent">Register agent</button>
       </div>
     </div>
@@ -537,6 +548,7 @@ function accessTab(a) {
 
 function render() {
   document.getElementById("main").innerHTML = state.view === "list" ? listView() : detailView();
+  document.querySelectorAll("[data-variant]").forEach(el => el.classList.toggle("on", el.dataset.variant === state.variation));
   renderModal();
   bind();
 }
@@ -550,7 +562,11 @@ function bind() {
   if (scope) scope.onchange = () => { state.scope = scope.value; render(); };
   const add = document.getElementById("add-agent");
   if (add) add.onclick = openAdd;
-  document.querySelectorAll("[data-variant]").forEach(el => el.onclick = () => { state.variation = el.dataset.variant; render(); });
+  document.querySelectorAll("[data-variant]").forEach(el => el.onclick = () => {
+    if (document.getElementById("variant-float").dataset.suppress) return;
+    state.variation = el.dataset.variant;
+    render();
+  });
   const un = document.getElementById("toggle-unscoped");
   if (un) un.onclick = () => { state.scope = state.scope === "not" ? "all" : "not"; state.onlyNoAccess = false; state.tab = "all"; render(); };
   const na = document.getElementById("toggle-noaccess");
@@ -733,6 +749,42 @@ function register() {
   state.toast = `${name} is saved and now appears in the agent list.`;
   render();
 }
+
+(function bindFloat() {
+  const float = document.getElementById("variant-float");
+  let drag = null;
+  float.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const box = float.getBoundingClientRect();
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: box.left, top: box.top, moved: false };
+    float.setPointerCapture(e.pointerId);
+  });
+  float.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+    drag.moved = true;
+    float.classList.add("dragging");
+    const left = Math.min(Math.max(8, drag.left + dx), window.innerWidth - float.offsetWidth - 8);
+    const top = Math.min(Math.max(8, drag.top + dy), window.innerHeight - float.offsetHeight - 8);
+    float.style.left = left + "px";
+    float.style.top = top + "px";
+    float.style.right = "auto";
+    float.style.bottom = "auto";
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (drag.moved) {
+      float.dataset.suppress = "1";
+      setTimeout(() => { delete float.dataset.suppress; }, 0);
+    }
+    drag = null;
+    float.classList.remove("dragging");
+  };
+  float.addEventListener("pointerup", end);
+  float.addEventListener("pointercancel", end);
+})();
 
 render();
 </script>

@@ -530,10 +530,10 @@ function bind() {
 const PROVIDERS = ["Okta", "Salesforce", "Microsoft Entra ID", "Google", "AWS IAM Identity Center"];
 const PERMISSION_SETS = ["EMA Permission Set", "Agentforce Runtime Set", "Vertex Permission Set", "Bedrock Permission Set", "Standard User"];
 const SCOPES = ["Sandboxed", "A2A · scoped", "MCP · read-only", "No destructive deletes"];
-const draft = { step: "type", kind: "", name: "", run: "", idjag: false, provider: "", callback: "", permission: "", scope: "" };
+const draft = { step: "type", kind: "", name: "", run: "", authMode: "", provider: "", callback: "", permission: "", scope: "" };
 
 function openAdd() {
-  Object.assign(draft, { step: "type", kind: "", name: "", run: "", idjag: false, provider: "", callback: "", permission: "", scope: "" });
+  Object.assign(draft, { step: "type", kind: "", name: "", run: "", authMode: "", provider: "", callback: "", permission: "", scope: "" });
   state.modal = "add";
   render();
 }
@@ -547,7 +547,9 @@ function stepReady() {
   if (draft.step === "type") return !!draft.kind;
   if (draft.step === "details") return draft.name.trim().length > 1 && !!draft.run;
   if (draft.step === "scope") return true;
-  const authReady = draft.idjag ? !!draft.provider : /^https?:\/\/\S+$/.test(draft.callback.trim());
+  const authReady = draft.authMode === "OAuth"
+    ? /^https?:\/\/\S+$/.test(draft.callback.trim())
+    : draft.authMode === "Enterprise Managed Authorization" && !!draft.provider;
   return authReady && !!draft.permission;
 }
 
@@ -573,19 +575,18 @@ function renderModal() {
       ${choice("run", "User machine", "User machine", "An agent running locally isn't secure enough to safely store a client secret.")}`;
   } else if (draft.step === "access") {
     const permLabel = who === "user" ? "User permission set" : "Permission set";
-    body = `<h2 style="margin:0 0 6px">How should ${esc(draft.name || "this agent")} authenticate?</h2>
-      <p class="lede" style="margin-bottom:12px">${draft.run} · ${who === "user" ? "User agent" : "Enterprise agent"}</p>
-      <label class="checkline"><input type="checkbox" id="idjag" ${draft.idjag ? "checked" : ""} /><span><b>Enable ID-JAG</b><p class="help" style="margin:2px 0 0">Use an identity assertion from an authentication provider.</p></span></label>
-      ${draft.idjag
-        ? `<div class="field"><label for="provider">Authentication provider</label><select id="provider"><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`
-        : `<div class="oauth"><div class="tag">OAUTH CONFIG</div><div class="field" style="margin-top:0"><label for="callback">Callback URL</label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div></div>`}
+    body = `<h2 style="margin:0 0 12px">Advanced settings</h2>
+      ${choice("authMode", "OAuth", "OAuth", "The user is redirected to a callback URL after authorization.")}
+      ${choice("authMode", "Enterprise Managed Authorization", "Enterprise Managed Authorization", "The agent authenticates through an authentication provider.")}
+      ${draft.authMode === "OAuth" ? `<div class="oauth"><div class="tag">OAUTH CONFIG</div><div class="field" style="margin-top:0"><label for="callback">Callback URL</label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div></div>` : ""}
+      ${draft.authMode === "Enterprise Managed Authorization" ? `<div class="field"><label for="provider">Authentication provider</label><select id="provider"><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>` : ""}
       <div class="field"><label for="permission">${permLabel}</label><select id="permission"><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   } else {
     body = `<h2 style="margin:0 0 6px">Scoped access</h2>
       <p class="lede" style="margin-bottom:12px">Optional. A scope narrows what ${esc(draft.name || "this agent")} can reach. You can leave this empty and add one later.</p>
       <div class="field"><label for="scope-pick">Scoped access</label><select id="scope-pick"><option value="">None</option>${SCOPES.map(p => `<option ${draft.scope === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   }
-  const steps = ["Agent type", "Name and where it runs", "Access", "Scoped access"];
+  const steps = ["Agent type", "Name and where it runs", "Advanced settings", "Scoped access"];
   const stepper = `<ol class="stepper" aria-label="Registration progress">
       ${steps.map((label, i) => {
         const n = i + 1;
@@ -609,8 +610,6 @@ function renderModal() {
   root.querySelectorAll(".choice").forEach(el => el.onclick = () => { draft[el.dataset.key] = el.dataset.value; renderModal(); bindModal(); });
   const name = document.getElementById("agent-name");
   if (name) name.oninput = () => { draft.name = name.value; syncNext(); };
-  const idjag = document.getElementById("idjag");
-  if (idjag) idjag.onchange = () => { draft.idjag = idjag.checked; renderModal(); bindModal(); };
   const provider = document.getElementById("provider");
   if (provider) provider.onchange = () => { draft.provider = provider.value; syncNext(); };
   const callback = document.getElementById("callback");
@@ -654,8 +653,8 @@ function register() {
     name,
     type: draft.kind,
     client: draft.run === "Provider server" ? "Confidential" : "Public",
-    auth: draft.idjag ? "ID-JAG" : "OAuth",
-    provider: draft.idjag ? draft.provider : "Callback URL",
+    auth: draft.authMode === "OAuth" ? "OAuth" : "Enterprise Managed Authorization",
+    provider: draft.authMode === "OAuth" ? "Callback URL" : draft.provider,
     access: draft.permission,
     users: draft.kind === "user" ? 0 : undefined,
     scope: needsScope ? "Not scoped" : draft.scope,

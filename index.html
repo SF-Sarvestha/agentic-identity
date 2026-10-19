@@ -572,7 +572,7 @@ function renderModal() {
       </div>
       <div class="field"><label>Where will this agent run?</label></div>
       ${choice("run", "Provider server", "Provider server", "Provider servers can store a client secret.")}
-      ${choice("run", "User local machine", "User local machine", "An agent running locally isn't secure enough to safely store a client secret.")}`;
+      ${choice("run", "User Local Machine", "User Local Machine", "An agent running locally isn't secure enough to safely store a client secret.")}`;
   } else if (draft.step === "access") {
     const permLabel = who === "user" ? "User permission set" : "Permission set";
     body = `<h2 style="margin:0 0 12px">Advanced settings</h2>

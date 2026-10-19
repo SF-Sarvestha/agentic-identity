@@ -595,7 +595,7 @@ function renderModal() {
   } else if (draft.step === "access") {
     const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
     const providerField = `<div class="field"><label for="provider">Authentication provider <span class="req">*</span></label><select id="provider" required><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
-    body = `<h2 style="margin:0 0 6px">Advanced settings</h2>
+    body = `<h2 style="margin:0 0 6px">Agent authorization setting</h2>
       <p class="lede" style="margin-bottom:12px">Required. Choose how this agent authenticates.</p>
       ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}
       ${authChoice("Enterprise Managed Authorization", "Enterprise Managed Authorization", "The agent authenticates through an authentication provider.", providerField)}`;
@@ -611,7 +611,7 @@ function renderModal() {
   const steps = [
     ["Agent type", false],
     ["Name and where it runs", false],
-    ["Advanced settings", false],
+    ["Agent authorization setting", false],
     ["Who can use it", false],
     ["Scoped access", true]
   ];

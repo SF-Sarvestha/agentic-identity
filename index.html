@@ -572,11 +572,13 @@ function bind() {
   document.querySelectorAll("[data-dtab]").forEach(el => el.onclick = () => { state.detailTab = el.dataset.dtab; render(); });
 }
 
+const PROVIDERS = ["Okta", "Salesforce", "Microsoft Entra ID", "Google", "AWS IAM Identity Center"];
 const PERMISSION_SETS = ["EMA Permission Set", "Agentforce Runtime Set", "Vertex Permission Set", "Bedrock Permission Set", "Standard User"];
-const draft = { step: "type", kind: "", name: "", authMode: "OAuth", callback: "", permission: "" };
+const SCOPES = ["Sandboxed", "A2A · scoped", "MCP · read-only", "No destructive deletes"];
+const draft = { step: "type", kind: "", name: "", run: "", authMode: "", provider: "", callback: "", permission: "", scope: "" };
 
 function openAdd() {
-  Object.assign(draft, { step: "type", kind: "", name: "", authMode: "OAuth", callback: "", permission: "" });
+  Object.assign(draft, { step: "type", kind: "", name: "", run: "", authMode: "", provider: "", callback: "", permission: "", scope: "" });
   state.modal = "add";
   render();
 }
@@ -586,43 +588,95 @@ function choice(key, value, title, body, rec) {
   return `<button class="choice ${on ? "on" : ""}" data-key="${key}" data-value="${value}"><span class="radio"></span><span><b>${title}${rec ? `<span class="rec">Recommended</span>` : ""}</b><p>${body}</p></span></button>`;
 }
 
+function authChoice(value, title, body, extra) {
+  const on = draft.authMode === value;
+  return `<div class="choice stack ${on ? "on" : ""}">
+    <button type="button" class="choice-hit" data-key="authMode" data-value="${value}"><span class="radio"></span><span><b>${title}</b><p>${body}</p></span></button>
+    ${on ? `<div class="choice-extra">${extra}</div>` : ""}
+  </div>`;
+}
+
+function isEnterprise() { return draft.kind === "enterprise"; }
+
 function stepReady() {
   if (draft.step === "type") return !!draft.kind;
-  if (draft.step === "details") return draft.name.trim().length > 1 && /^https?:\/\/\S+$/.test(draft.callback.trim());
+  if (draft.step === "details") {
+    if (isEnterprise()) return draft.name.trim().length > 1 && /^https?:\/\/\S+$/.test(draft.callback.trim());
+    return draft.name.trim().length > 1 && !!draft.run;
+  }
+  if (draft.step === "access") {
+    if (draft.authMode === "OAuth") return /^https?:\/\/\S+$/.test(draft.callback.trim());
+    if (draft.authMode === "Enterprise Managed Authorization") return !!draft.provider;
+    return false;
+  }
   if (draft.step === "permission") return !!draft.permission;
+  if (draft.step === "scope") return true;
   return false;
 }
 
 function renderModal() {
   const root = document.getElementById("modal-root");
   if (state.modal !== "add") { root.innerHTML = ""; return; }
-  const stepIndex = { type: 1, details: 2, permission: 3 }[draft.step];
-  const who = draft.kind === "enterprise" ? "enterprise" : "user";
+  const enterprise = isEnterprise();
+  const stepIndex = enterprise
+    ? { type: 1, details: 2, permission: 3 }[draft.step]
+    : { type: 1, details: 2, access: 3, permission: 4, scope: 5 }[draft.step];
+  const who = enterprise ? "enterprise" : "user";
   let body = "";
   if (draft.step === "type") {
     body = `<h2 style="margin:0 0 6px">What do you want to register?</h2>
       <p class="lede" style="margin-bottom:14px">A user agent acts for the signed-in person. An enterprise agent runs under its own identity.</p>
       ${choice("kind", "user", "User agent", "Acts for the signed-in person. Access follows that user.")}
       ${choice("kind", "enterprise", "Enterprise agent", "Runs under its own identity, including when nobody is signed in.")}`;
-  } else if (draft.step === "details") {
-    body = `<h2 style="margin:0 0 12px">Name this external ${who} agent</h2>
-      <div class="field"><label for="agent-name">External ${who} agent name <span class="req">*</span></label>
+  } else if (draft.step === "details" && enterprise) {
+    body = `<h2 style="margin:0 0 12px">Name this external enterprise agent</h2>
+      <div class="field"><label for="agent-name">External enterprise agent name <span class="req">*</span></label>
         <p class="help">This is the name admins see in the agent list.</p>
         <input id="agent-name" required value="${esc(draft.name)}" />
       </div>
       <h2 style="margin:18px 0 6px">Agent authorization setting</h2>
       <div class="field"><label for="callback">OAuth Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
-  } else {
-    const stepTitle = draft.kind === "enterprise" ? "Assign permissions to your agent" : "Who can use this agent?";
+  } else if (draft.step === "details") {
+    body = `<h2 style="margin:0 0 12px">Name this external user agent</h2>
+      <div class="field"><label for="agent-name">External user agent name <span class="req">*</span></label>
+        <p class="help">This is the name admins see in the agent list.</p>
+        <input id="agent-name" required value="${esc(draft.name)}" />
+      </div>
+      <div class="field"><label>Where will this agent run? <span class="req">*</span></label></div>
+      ${choice("run", "Provider server", "Provider server", "Provider servers can store a client secret.")}
+      ${choice("run", "User Local Machine", "User Local Machine", "An agent running locally isn't secure enough to safely store a client secret.")}`;
+  } else if (draft.step === "access") {
+    const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
+    const providerField = `<div class="field"><label for="provider">Authentication provider <span class="req">*</span></label><select id="provider" required><option value="">Select</option>${PROVIDERS.map(p => `<option ${draft.provider === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+    body = `<h2 style="margin:0 0 6px">Agent authorization setting</h2>
+      <p class="lede" style="margin-bottom:12px">Required. Choose how this agent authenticates.</p>
+      ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}
+      ${authChoice("Enterprise Managed Authorization", "Enterprise Managed Authorization", "The agent authenticates through an authentication provider.", providerField)}`;
+  } else if (draft.step === "permission") {
+    const stepTitle = enterprise ? "Assign permissions to your agent" : "Who can use this agent?";
     body = `<h2 style="margin:0 0 6px">${stepTitle}</h2>
       <p class="lede" style="margin-bottom:12px">Users with this setting can use ${esc(draft.name || "this agent")}.</p>
       <div class="field"><label for="permission">User permission setting <span class="req">*</span></label><select id="permission" required><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
+  } else {
+    body = `<h2 style="margin:0 0 6px">Scoped access</h2>
+      <p class="lede" style="margin-bottom:12px">Optional. A scope narrows what ${esc(draft.name || "this agent")} can reach. You can leave this empty and add one later.</p>
+      <div class="field"><label for="scope-pick">Scoped access <span class="opt">Optional</span></label><select id="scope-pick"><option value="">None</option>${SCOPES.map(p => `<option ${draft.scope === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   }
-  const steps = [
-    ["Agent type", false],
-    ["Name and authorization", false],
-    ["Assign permissions to agent", false]
-  ];
+  const steps = enterprise
+    ? [
+      ["Agent type", false],
+      ["Name and authorization", false],
+      ["Assign permissions to agent", false]
+    ]
+    : [
+      ["Agent type", false],
+      ["Name and where it runs", false],
+      ["Agent authorization setting", false],
+      ["Assign permissions to agent", false],
+      ["Scoped access", true]
+    ];
+  const totalSteps = steps.length;
+  const saveStep = enterprise ? "permission" : "scope";
   const vertical = state.variation === "B";
   const stepper = `<ol class="stepper ${vertical ? "vertical" : ""}" aria-label="Registration progress">
       ${steps.map(([label, optional], i) => {
@@ -642,18 +696,22 @@ function renderModal() {
     ${content}
     <footer>
       <button class="btn ghost" id="cancel">Cancel</button>
-      <span class="spacer note">Step ${stepIndex} of 3 · Required · nothing is saved until you save</span>
+      <span class="spacer note">Step ${stepIndex} of ${totalSteps} · ${draft.step === "scope" ? "Optional" : "Required"} · nothing is saved until you save</span>
       ${draft.step !== "type" ? `<button class="btn quiet" id="back">Back</button>` : ""}
-      <button class="btn primary" id="next" ${stepReady() ? "" : "disabled"}>${draft.step === "permission" ? "Save" : "Continue"}</button>
+      <button class="btn primary" id="next" ${stepReady() ? "" : "disabled"}>${draft.step === saveStep ? "Save" : "Continue"}</button>
     </footer>
   </div></div>`;
   root.querySelectorAll("[data-key]").forEach(el => el.onclick = () => { draft[el.dataset.key] = el.dataset.value; renderModal(); bindModal(); });
   const name = document.getElementById("agent-name");
   if (name) name.oninput = () => { draft.name = name.value; syncNext(); };
+  const provider = document.getElementById("provider");
+  if (provider) provider.onchange = () => { draft.provider = provider.value; syncNext(); };
   const callback = document.getElementById("callback");
   if (callback) callback.oninput = () => { draft.callback = callback.value; syncNext(); };
   const permission = document.getElementById("permission");
   if (permission) permission.onchange = () => { draft.permission = permission.value; syncNext(); };
+  const scopePick = document.getElementById("scope-pick");
+  if (scopePick) scopePick.onchange = () => { draft.scope = scopePick.value; };
   bindModal();
 }
 
@@ -668,14 +726,19 @@ function bindModal() {
   const cancel = document.getElementById("cancel"); if (cancel) cancel.onclick = close;
   const back = document.getElementById("back");
   if (back) back.onclick = () => {
-    draft.step = { details: "type", permission: "details" }[draft.step];
+    const previous = isEnterprise()
+      ? { details: "type", permission: "details" }
+      : { details: "type", access: "details", permission: "access", scope: "permission" };
+    draft.step = previous[draft.step];
     render();
   };
   const next = document.getElementById("next");
   if (next) next.onclick = () => {
     if (!stepReady()) return;
     if (draft.step === "type") draft.step = "details";
-    else if (draft.step === "details") draft.step = "permission";
+    else if (draft.step === "details") draft.step = isEnterprise() ? "permission" : "access";
+    else if (draft.step === "access") draft.step = "permission";
+    else if (draft.step === "permission" && !isEnterprise()) draft.step = "scope";
     else return register();
     render();
   };
@@ -683,21 +746,24 @@ function bindModal() {
 
 function register() {
   const name = draft.name.trim();
+  const needsScope = isEnterprise() || !draft.scope;
   AGENTS.push({
     name,
     type: draft.kind,
-    auth: "OAuth",
-    provider: "Callback URL",
+    client: isEnterprise() ? "" : (draft.run === "Provider server" ? "Confidential" : "Public"),
+    auth: isEnterprise() || draft.authMode === "OAuth" ? "OAuth" : "Enterprise Managed Authorization",
+    provider: isEnterprise() || draft.authMode === "OAuth" ? "Callback URL" : draft.provider,
     access: draft.permission,
     users: draft.kind === "user" ? 0 : undefined,
-    scope: "Not scoped",
-    scopeTone: "bad",
-    needsScope: true,
+    scope: needsScope ? "Not scoped" : draft.scope,
+    scopeTone: needsScope ? "bad" : "ok",
+    needsScope,
     clientId: "3MVG9" + Math.random().toString(36).slice(2, 14),
+    run: draft.run,
     callback: draft.callback
   });
   AGENTS.sort((a, b) => a.name.localeCompare(b.name));
-  if (!UNSCOPED.includes(name)) UNSCOPED.push(name);
+  if (needsScope && !UNSCOPED.includes(name)) UNSCOPED.push(name);
   state.modal = null;
   state.view = "list";
   state.tab = "all";

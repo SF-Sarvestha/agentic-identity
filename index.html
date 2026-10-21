@@ -586,14 +586,6 @@ function choice(key, value, title, body, rec) {
   return `<button class="choice ${on ? "on" : ""}" data-key="${key}" data-value="${value}"><span class="radio"></span><span><b>${title}${rec ? `<span class="rec">Recommended</span>` : ""}</b><p>${body}</p></span></button>`;
 }
 
-function authChoice(value, title, body, extra) {
-  const on = draft.authMode === value;
-  return `<div class="choice stack ${on ? "on" : ""}">
-    <button type="button" class="choice-hit" data-key="authMode" data-value="${value}"><span class="radio"></span><span><b>${title}</b><p>${body}</p></span></button>
-    ${on ? `<div class="choice-extra">${extra}</div>` : ""}
-  </div>`;
-}
-
 function stepReady() {
   if (draft.step === "type") return !!draft.kind;
   if (draft.step === "details") return draft.name.trim().length > 1 && /^https?:\/\/\S+$/.test(draft.callback.trim());
@@ -613,15 +605,13 @@ function renderModal() {
       ${choice("kind", "user", "User agent", "Acts for the signed-in person. Access follows that user.")}
       ${choice("kind", "enterprise", "Enterprise agent", "Runs under its own identity, including when nobody is signed in.")}`;
   } else if (draft.step === "details") {
-    const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
     body = `<h2 style="margin:0 0 12px">Name this external ${who} agent</h2>
       <div class="field"><label for="agent-name">External ${who} agent name <span class="req">*</span></label>
         <p class="help">This is the name admins see in the agent list.</p>
         <input id="agent-name" required value="${esc(draft.name)}" />
       </div>
       <h2 style="margin:18px 0 6px">Agent authorization setting</h2>
-      <p class="lede" style="margin-bottom:12px">Required. This agent authenticates with OAuth.</p>
-      ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}`;
+      <div class="field"><label for="callback">OAuth Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
   } else {
     const stepTitle = draft.kind === "enterprise" ? "Assign permissions to your agent" : "Who can use this agent?";
     body = `<h2 style="margin:0 0 6px">${stepTitle}</h2>

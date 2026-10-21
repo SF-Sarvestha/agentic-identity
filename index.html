@@ -625,7 +625,8 @@ function renderModal() {
       <p class="lede" style="margin-bottom:12px">Required. This agent authenticates with OAuth.</p>
       ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}`;
   } else {
-    body = `<h2 style="margin:0 0 6px">Who can use this agent?</h2>
+    const stepTitle = draft.kind === "enterprise" ? "Assign permissions to your agent" : "Who can use this agent?";
+    body = `<h2 style="margin:0 0 6px">${stepTitle}</h2>
       <p class="lede" style="margin-bottom:12px">Users with this setting can use ${esc(draft.name || "this agent")}.</p>
       <div class="field"><label for="permission">User permission setting <span class="req">*</span></label><select id="permission" required><option value="">Select</option>${PERMISSION_SETS.map(p => `<option ${draft.permission === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></div>`;
   }
@@ -633,7 +634,7 @@ function renderModal() {
     ["Agent type", false],
     ["Name", false],
     ["Agent authorization setting", false],
-    ["Who can use it", false]
+    ["Assign permissions to agent", false]
   ];
   const vertical = state.variation === "B";
   const stepper = `<ol class="stepper ${vertical ? "vertical" : ""}" aria-label="Registration progress">

@@ -596,8 +596,7 @@ function authChoice(value, title, body, extra) {
 
 function stepReady() {
   if (draft.step === "type") return !!draft.kind;
-  if (draft.step === "details") return draft.name.trim().length > 1;
-  if (draft.step === "access") return /^https?:\/\/\S+$/.test(draft.callback.trim());
+  if (draft.step === "details") return draft.name.trim().length > 1 && /^https?:\/\/\S+$/.test(draft.callback.trim());
   if (draft.step === "permission") return !!draft.permission;
   return false;
 }
@@ -605,7 +604,7 @@ function stepReady() {
 function renderModal() {
   const root = document.getElementById("modal-root");
   if (state.modal !== "add") { root.innerHTML = ""; return; }
-  const stepIndex = { type: 1, details: 2, access: 3, permission: 4 }[draft.step];
+  const stepIndex = { type: 1, details: 2, permission: 3 }[draft.step];
   const who = draft.kind === "enterprise" ? "enterprise" : "user";
   let body = "";
   if (draft.step === "type") {
@@ -614,14 +613,13 @@ function renderModal() {
       ${choice("kind", "user", "User agent", "Acts for the signed-in person. Access follows that user.")}
       ${choice("kind", "enterprise", "Enterprise agent", "Runs under its own identity, including when nobody is signed in.")}`;
   } else if (draft.step === "details") {
+    const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
     body = `<h2 style="margin:0 0 12px">Name this external ${who} agent</h2>
       <div class="field"><label for="agent-name">External ${who} agent name <span class="req">*</span></label>
         <p class="help">This is the name admins see in the agent list.</p>
         <input id="agent-name" required value="${esc(draft.name)}" />
-      </div>`;
-  } else if (draft.step === "access") {
-    const callbackField = `<div class="field"><label for="callback">Callback URL <span class="req">*</span></label><p class="help">The agent URL where the user is redirected after authorization.</p><input id="callback" required placeholder="https://localhost/callback" value="${esc(draft.callback)}" /></div>`;
-    body = `<h2 style="margin:0 0 6px">Agent authorization setting</h2>
+      </div>
+      <h2 style="margin:18px 0 6px">Agent authorization setting</h2>
       <p class="lede" style="margin-bottom:12px">Required. This agent authenticates with OAuth.</p>
       ${authChoice("OAuth", "OAuth", "The user is redirected to a callback URL after authorization.", callbackField)}`;
   } else {
@@ -632,8 +630,7 @@ function renderModal() {
   }
   const steps = [
     ["Agent type", false],
-    ["Name", false],
-    ["Agent authorization setting", false],
+    ["Name and authorization", false],
     ["Assign permissions to agent", false]
   ];
   const vertical = state.variation === "B";
@@ -655,7 +652,7 @@ function renderModal() {
     ${content}
     <footer>
       <button class="btn ghost" id="cancel">Cancel</button>
-      <span class="spacer note">Step ${stepIndex} of 4 · Required · nothing is saved until you save</span>
+      <span class="spacer note">Step ${stepIndex} of 3 · Required · nothing is saved until you save</span>
       ${draft.step !== "type" ? `<button class="btn quiet" id="back">Back</button>` : ""}
       <button class="btn primary" id="next" ${stepReady() ? "" : "disabled"}>${draft.step === "permission" ? "Save" : "Continue"}</button>
     </footer>
@@ -681,15 +678,14 @@ function bindModal() {
   const cancel = document.getElementById("cancel"); if (cancel) cancel.onclick = close;
   const back = document.getElementById("back");
   if (back) back.onclick = () => {
-    draft.step = { details: "type", access: "details", permission: "access" }[draft.step];
+    draft.step = { details: "type", permission: "details" }[draft.step];
     render();
   };
   const next = document.getElementById("next");
   if (next) next.onclick = () => {
     if (!stepReady()) return;
     if (draft.step === "type") draft.step = "details";
-    else if (draft.step === "details") draft.step = "access";
-    else if (draft.step === "access") draft.step = "permission";
+    else if (draft.step === "details") draft.step = "permission";
     else return register();
     render();
   };
